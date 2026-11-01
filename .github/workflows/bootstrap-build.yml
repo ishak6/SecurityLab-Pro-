@@ -1,0 +1,32 @@
+name: Bootstrap SecurityLab Pro APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract project
+        run: |
+          unzip -q SecurityLab-Pro-Android-Starter.zip -d /tmp/securitylab
+          cp -R /tmp/securitylab/SecurityLab-Pro/. .
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecurityLab-Pro-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
