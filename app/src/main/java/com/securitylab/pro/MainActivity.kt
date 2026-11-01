@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +18,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URI
 
 private val Blue = Color(0xFF3978FF)
@@ -44,6 +46,10 @@ private data class TabItem(
 fun SecurityLabApp() {
     var darkMode by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    var latestReport by remember {
+        mutableStateOf<SecurityAssessmentResult?>(null)
+    }
 
     val tabs = listOf(
         TabItem("Home", Icons.Default.Home),
@@ -77,7 +83,10 @@ fun SecurityLabApp() {
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             icon = {
-                                Icon(item.icon, contentDescription = item.title)
+                                Icon(
+                                    item.icon,
+                                    contentDescription = item.title
+                                )
                             },
                             label = { Text(item.title) }
                         )
@@ -97,9 +106,17 @@ fun SecurityLabApp() {
                         onScan = { selectedTab = 1 },
                         onTools = { selectedTab = 2 }
                     )
-                    1 -> ScannerScreen()
+
+                    1 -> ScannerScreen(
+                        onResult = { latestReport = it }
+                    )
+
                     2 -> ToolsScreen()
-                    3 -> ReportsScreen()
+
+                    3 -> ReportsScreen(
+                        result = latestReport
+                    )
+
                     4 -> SettingsScreen(
                         darkMode = darkMode,
                         onThemeChange = { darkMode = it }
@@ -133,6 +150,7 @@ fun AppHeader() {
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
+
             Text(
                 "Mobile Security Toolkit",
                 style = MaterialTheme.typography.bodySmall,
@@ -178,9 +196,11 @@ fun AppCard(
 
             Spacer(Modifier.width(16.dp))
 
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold)
+
                 Spacer(Modifier.height(4.dp))
+
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -188,8 +208,10 @@ fun AppCard(
                 )
             }
 
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, contentDescription = null)
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null
+            )
         }
     }
 }
@@ -200,7 +222,10 @@ fun SectionTitle(title: String) {
         title,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 18.dp, bottom = 10.dp)
+        modifier = Modifier.padding(
+            top = 18.dp,
+            bottom = 10.dp
+        )
     )
 }
 
@@ -239,18 +264,23 @@ fun HomeScreen(
                     "SECURITY OVERVIEW",
                     color = Color.White.copy(alpha = 0.8f)
                 )
+
                 Spacer(Modifier.height(10.dp))
+
                 Text(
                     "Ready to assess",
                     color = Color.White,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
+
                 Text(
-                    "No remote scans have been performed.",
+                    "Passive HTTPS assessment available.",
                     color = Color.White
                 )
+
                 Spacer(Modifier.height(16.dp))
+
                 Button(
                     onClick = onScan,
                     colors = ButtonDefaults.buttonColors(
@@ -267,7 +297,7 @@ fun HomeScreen(
 
         AppCard(
             "Security Scanner",
-            "Authorized target assessment setup",
+            "Passive HTTPS and security header assessment",
             Icons.Default.Search,
             onScan
         )
@@ -302,7 +332,7 @@ fun HomeScreen(
         Spacer(Modifier.height(20.dp))
 
         Text(
-            "Educational tools do not replace a professional security audit.",
+            "Only assess websites you own or are authorized to assess.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -310,11 +340,20 @@ fun HomeScreen(
 }
 
 @Composable
-fun ScannerScreen() {
+fun ScannerScreen(
+    onResult: (SecurityAssessmentResult) -> Unit
+) {
     var target by remember { mutableStateOf("") }
     var scope by remember { mutableStateOf("") }
     var authorized by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("No assessment started.") }
+    var loading by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("Ready to assess.") }
+
+    var report by remember {
+        mutableStateOf<SecurityAssessmentResult?>(null)
+    }
+
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -323,13 +362,13 @@ fun ScannerScreen() {
             .padding(18.dp)
     ) {
         Text(
-            "New Security Assessment",
+            "Website Security Scanner",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
 
         Text(
-            "Only assess systems you own or have explicit permission to test.",
+            "Checks HTTPS response headers and TLS certificate using a single read-only request.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -338,7 +377,7 @@ fun ScannerScreen() {
         OutlinedTextField(
             value = target,
             onValueChange = { target = it },
-            label = { Text("Target URL or Host") },
+            label = { Text("HTTPS Website URL") },
             placeholder = { Text("https://example.com") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -349,78 +388,175 @@ fun ScannerScreen() {
         OutlinedTextField(
             value = scope,
             onValueChange = { scope = it },
-            label = { Text("Authorized testing scope") },
-            placeholder = { Text("Example: my own staging website") },
+            label = { Text("Authorized Scope / Notes") },
+            placeholder = { Text("Example: My own website") },
             modifier = Modifier.fillMaxWidth(),
-            minLines = 3
+            minLines = 2
         )
-
-        Spacer(Modifier.height(12.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
                 checked = authorized,
                 onCheckedChange = { authorized = it }
             )
-            Text("I own this target or have written permission.")
+
+            Text(
+                "I own this website or have permission."
+            )
         }
 
         Button(
             onClick = {
-                message = when {
-                    target.isBlank() ->
-                        "Enter a target first."
-                    scope.isBlank() ->
-                        "Describe the authorized scope."
-                    !authorized ->
-                        "Permission confirmation is required."
-                    else ->
-                        "Setup validated. Remote scanning engine is not implemented yet."
+                val valid = runCatching {
+                    val uri = URI(target.trim())
+
+                    uri.scheme.equals("https", true) &&
+                        !uri.host.isNullOrBlank()
+                }.getOrDefault(false)
+
+                when {
+                    !valid -> {
+                        message = "Enter a valid HTTPS URL."
+                    }
+
+                    !authorized -> {
+                        message = "Authorization confirmation is required."
+                    }
+
+                    scope.isBlank() -> {
+                        message = "Describe the authorized scope."
+                    }
+
+                    else -> {
+                        loading = true
+                        message = "Connecting securely..."
+
+                        coroutineScope.launch {
+                            val response = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    SecurityAssessmentEngine.inspect(
+                                        target.trim()
+                                    )
+                                }
+                            }
+
+                            loading = false
+
+                            response.onSuccess {
+                                report = it
+                                onResult(it)
+                                message = "Assessment completed."
+                            }.onFailure {
+                                message = "Assessment failed: ${
+                                    it.message ?: "Connection error"
+                                }"
+                            }
+                        }
+                    }
                 }
             },
-            enabled = target.isNotBlank() &&
-                    scope.isNotBlank() &&
-                    authorized,
+            enabled = !loading &&
+                target.isNotBlank() &&
+                scope.isNotBlank() &&
+                authorized,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null)
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    Icons.Default.Security,
+                    contentDescription = null
+                )
+            }
+
             Spacer(Modifier.width(8.dp))
-            Text("Validate Assessment Setup")
+
+            Text(
+                if (loading) "Assessing..." else "Start Assessment"
+            )
         }
 
-        SectionTitle("Status")
+        SectionTitle("Assessment Status")
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 message,
-                modifier = Modifier.padding(18.dp)
+                modifier = Modifier.padding(16.dp)
             )
         }
 
-        SectionTitle("Planned Assessment Modules")
+        report?.let { result ->
 
-        listOf(
-            "SQL Injection checks",
-            "Cross-Site Scripting checks",
-            "API Security checks",
-            "Security Header analysis",
-            "SSL/TLS certificate inspection"
-        ).forEach {
-            Text(
-                "• $it",
-                modifier = Modifier.padding(vertical = 5.dp)
-            )
+            SectionTitle("Assessment Results")
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "HTTP Status: ${result.statusCode}",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text("Website: ${result.url}")
+
+                    Text("Cipher Suite: ${result.cipherSuite}")
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Text(
+                        "TLS Certificate",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text("Subject: ${result.certificateSubject}")
+
+                    Text("Expiry: ${result.certificateExpiry}")
+
+                    Text("Checked: ${result.checkedAt}")
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        "Security Header Findings",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text("Passed: ${result.passedCount}")
+
+                    Text("Warnings: ${result.warningCount}")
+
+                    result.findings.forEach { finding ->
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Text(
+                            "${if (finding.passed) "✓" else "⚠"} ${finding.name}",
+                            fontWeight = FontWeight.Bold,
+                            color = if (finding.passed) {
+                                Color(0xFF20A66A)
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            }
+                        )
+
+                        Text(finding.detail)
+                    }
+                }
+            }
         }
+
+        SectionTitle("Assessment Limits")
 
         Text(
-            "These remote modules are planned, not active in this build.",
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall
+            "This is a passive baseline assessment. It does not perform SQL injection, XSS, authentication bypass, port scanning, or exploitation.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -428,10 +564,16 @@ fun ScannerScreen() {
 @Composable
 fun ToolsScreen() {
     var jwt by remember { mutableStateOf("") }
-    var jwtResult by remember { mutableStateOf("Decoded token data will appear here.") }
+
+    var jwtResult by remember {
+        mutableStateOf("Decoded token data will appear here.")
+    }
 
     var url by remember { mutableStateOf("") }
-    var urlResult by remember { mutableStateOf("Enter a URL to validate.") }
+
+    var urlResult by remember {
+        mutableStateOf("Enter a URL to validate.")
+    }
 
     Column(
         modifier = Modifier
@@ -448,13 +590,13 @@ fun ToolsScreen() {
         SectionTitle("JWT Decoder")
 
         Text(
-            "Decodes the JWT header and payload locally. It does not verify the signature."
+            "Decodes JWT header and payload locally. Signature is not verified."
         )
 
         OutlinedTextField(
             value = jwt,
             onValueChange = { jwt = it },
-            label = { Text("Paste JWT token") },
+            label = { Text("Paste JWT Token") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 4
         )
@@ -473,10 +615,7 @@ fun ToolsScreen() {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+                .padding(top = 12.dp)
         ) {
             Text(
                 jwtResult,
@@ -512,19 +651,30 @@ fun ToolsScreen() {
 
         SectionTitle("Security Headers Guide")
 
-        listOf(
+        val headers = listOf(
             "Content-Security-Policy" to
-                    "Helps restrict permitted content sources.",
+                "Restricts permitted content sources.",
+
             "Strict-Transport-Security" to
-                    "Requests browsers to use HTTPS.",
+                "Requests browsers to use HTTPS.",
+
             "X-Content-Type-Options" to
-                    "Helps prevent MIME type sniffing.",
+                "Helps prevent MIME type sniffing.",
+
             "Referrer-Policy" to
-                    "Controls referrer information.",
+                "Controls referrer information.",
+
             "Permissions-Policy" to
-                    "Controls access to browser features."
-        ).forEach { (name, description) ->
-            AppCard(name, description, Icons.Default.Security)
+                "Controls access to browser features."
+        )
+
+        headers.forEach { (name, description) ->
+            AppCard(
+                name,
+                description,
+                Icons.Default.Security
+            )
+
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -533,6 +683,7 @@ fun ToolsScreen() {
 fun decodeJwt(token: String): String {
     return try {
         val parts = token.trim().split(".")
+
         require(parts.size == 3) {
             "Invalid JWT format. Expected three segments."
         }
@@ -541,9 +692,10 @@ fun decodeJwt(token: String): String {
             val bytes = Base64.decode(
                 part,
                 Base64.URL_SAFE or
-                        Base64.NO_PADDING or
-                        Base64.NO_WRAP
+                    Base64.NO_PADDING or
+                    Base64.NO_WRAP
             )
+
             return bytes.toString(Charsets.UTF_8)
         }
 
@@ -551,7 +703,8 @@ fun decodeJwt(token: String): String {
         val payload = decodePart(parts[1])
 
         "HEADER\n$header\n\nPAYLOAD\n$payload\n\n" +
-                "Note: Signature has NOT been verified."
+            "WARNING: Signature has NOT been verified."
+
     } catch (e: Exception) {
         "Could not decode token: ${e.message ?: "Invalid input"}"
     }
@@ -562,22 +715,27 @@ fun validateHttpsUrl(input: String): String {
         val uri = URI(input.trim())
 
         when {
-            uri.scheme != "https" ->
+            !uri.scheme.equals("https", true) ->
                 "Not HTTPS. Use an https:// URL."
+
             uri.host.isNullOrBlank() ->
                 "Invalid URL: hostname is missing."
+
             else ->
                 "Valid HTTPS URL format.\nHost: ${uri.host}\n\n" +
-                        "This checks URL format only. It does not connect " +
-                        "to the server or inspect its certificate."
+                    "This checks URL format only. Use Scanner for " +
+                    "a real connection and certificate assessment."
         }
+
     } catch (e: Exception) {
         "Invalid URL: ${e.message ?: "Check the address."}"
     }
 }
 
 @Composable
-fun ReportsScreen() {
+fun ReportsScreen(
+    result: SecurityAssessmentResult?
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -590,18 +748,44 @@ fun ReportsScreen() {
             fontWeight = FontWeight.Bold
         )
 
-        SectionTitle("Assessment Reports")
+        SectionTitle("Latest Assessment")
 
-        AppCard(
-            "No reports yet",
-            "Reports will appear here after report generation is implemented.",
-            Icons.Default.Description
-        )
+        if (result == null) {
+            AppCard(
+                "No reports yet",
+                "Run a passive assessment to create a report.",
+                Icons.Default.Description
+            )
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        result.url,
+                        fontWeight = FontWeight.Bold
+                    )
 
-        Spacer(Modifier.height(16.dp))
+                    Text("HTTP Status: ${result.statusCode}")
+
+                    Text("Passed: ${result.passedCount}")
+
+                    Text("Warnings: ${result.warningCount}")
+
+                    Text("Checked: ${result.checkedAt}")
+
+                    result.findings.forEach {
+                        Spacer(Modifier.height(8.dp))
+                        Text("${it.name}: ${it.detail}")
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
 
         Text(
-            "PDF report export is planned and is not available in this build.",
+            "This version displays the latest report during the current app session. Persistent history and PDF export are not included yet.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -634,7 +818,11 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Dark Theme", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Dark Theme",
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text(
                         "Switch between dark and light appearance.",
                         style = MaterialTheme.typography.bodySmall
@@ -652,7 +840,7 @@ fun SettingsScreen(
 
         AppCard(
             "Security & Privacy",
-            "Local educational tools and permission-first testing",
+            "Permission-first security assessment",
             Icons.Default.PrivacyTip
         )
 
@@ -660,7 +848,7 @@ fun SettingsScreen(
 
         AppCard(
             "About SecurityLab Pro",
-            "Version 1.0 • Android",
+            "Version 1.1 • Android",
             Icons.Default.Info
         )
     }
