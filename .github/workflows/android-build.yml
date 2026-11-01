@@ -1,3 +1,4 @@
+
 name: Build SecurityLab Pro APK
 
 on:
@@ -29,6 +30,7 @@ jobs:
 
       - name: Install Android SDK packages
         run: |
+          yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Setup Gradle
@@ -37,7 +39,7 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
