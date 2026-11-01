@@ -42,7 +42,8 @@ object SecurityAssessmentEngine {
             "Hostname is missing."
         }
 
-        val connection = url.openConnection() as HttpsURLConnection
+        val connection =
+            url.openConnection() as HttpsURLConnection
 
         connection.apply {
             requestMethod = "GET"
@@ -73,11 +74,10 @@ object SecurityAssessmentEngine {
                 connection.serverCertificates
                     .firstOrNull() as? X509Certificate
 
-            val dateFormat =
-                SimpleDateFormat(
-                    "yyyy-MM-dd HH:mm:ss",
-                    Locale.US
-                )
+            val dateFormat = SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss",
+                Locale.US
+            )
 
             val findings = mutableListOf<HeaderFinding>()
 
@@ -140,7 +140,8 @@ object SecurityAssessmentEngine {
             } ?: "Unavailable"
 
             if (certificate != null) {
-                val expired = certificate.notAfter.before(Date())
+                val expired =
+                    certificate.notAfter.before(Date())
 
                 findings.add(
                     HeaderFinding(
@@ -166,7 +167,8 @@ object SecurityAssessmentEngine {
             return SecurityAssessmentResult(
                 url = address,
                 statusCode = status,
-                cipherSuite = connection.cipherSuite ?: "Unavailable",
+                cipherSuite =
+                    connection.cipherSuite ?: "Unavailable",
                 certificateSubject =
                     certificate?.subjectX500Principal?.name
                         ?: "Unavailable",
