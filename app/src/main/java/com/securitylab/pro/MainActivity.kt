@@ -1,13 +1,15 @@
+
 package com.securitylab.pro
 
 import android.os.Bundle
 import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,9 +39,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class TabItem(
+private data class AppDestination(
     val title: String,
-    val icon: ImageVector
+    val subtitle: String,
+    val icon: ImageVector,
+    val available: Boolean
 )
 
 @Composable
@@ -51,13 +55,94 @@ fun SecurityLabApp() {
         mutableStateOf<SecurityAssessmentResult?>(null)
     }
 
-    val tabs = listOf(
-        TabItem("Home", Icons.Default.Home),
-        TabItem("Scanner", Icons.Default.Security),
-        TabItem("Tools", Icons.Default.Build),
-        TabItem("Reports", Icons.Default.Description),
-        TabItem("Settings", Icons.Default.Settings)
+    val drawerState = rememberDrawerState(
+        initialValue = DrawerValue.Closed
     )
+
+    val scope = rememberCoroutineScope()
+
+    val destinations = listOf(
+        AppDestination(
+            "Dashboard",
+            "Main security dashboard",
+            Icons.Default.Home,
+            true
+        ),
+        AppDestination(
+            "Security Scanner",
+            "HTTPS and security headers assessment",
+            Icons.Default.Security,
+            true
+        ),
+        AppDestination(
+            "Research Browser",
+            "Security research browser",
+            Icons.Default.Language,
+            false
+        ),
+        AppDestination(
+            "Recon Studio",
+            "Asset and attack surface discovery",
+            Icons.Default.Search,
+            false
+        ),
+        AppDestination(
+            "Bypass Research",
+            "Authorized access-control analysis",
+            Icons.Default.Policy,
+            false
+        ),
+        AppDestination(
+            "HackBar Studio",
+            "Basic security utilities",
+            Icons.Default.Build,
+            true
+        ),
+        AppDestination(
+            "SQL Injection Lab",
+            "Safe SQL injection learning",
+            Icons.Default.Storage,
+            false
+        ),
+        AppDestination(
+            "Vulnerability Lab",
+            "Web security learning modules",
+            Icons.Default.BugReport,
+            false
+        ),
+        AppDestination(
+            "API Security",
+            "REST and API security testing",
+            Icons.Default.Api,
+            false
+        ),
+        AppDestination(
+            "SSL/TLS Lab",
+            "Certificate and HTTPS security",
+            Icons.Default.Lock,
+            false
+        ),
+        AppDestination(
+            "Bug Bounty Manager",
+            "Programs, scope and findings",
+            Icons.Default.Star,
+            false
+        ),
+        AppDestination(
+            "Report Center",
+            "Latest security assessment report",
+            Icons.Default.Description,
+            true
+        ),
+        AppDestination(
+            "Settings",
+            "Application settings",
+            Icons.Default.Settings,
+            true
+        )
+    )
+
+    val bottomTabs = listOf(0, 2, 5, 11, 12)
 
     val colors = if (darkMode) {
         darkColorScheme(
@@ -73,54 +158,211 @@ fun SecurityLabApp() {
         )
     }
 
+    BackHandler(
+        enabled = drawerState.isOpen || selectedTab != 0
+    ) {
+        scope.launch {
+            if (drawerState.isOpen) {
+                drawerState.close()
+            } else {
+                selectedTab = 0
+            }
+        }
+    }
+
     MaterialTheme(colorScheme = colors) {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            bottomBar = {
-                NavigationBar {
-                    tabs.forEachIndexed { index, item ->
-                        NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    drawerContainerColor =
+                        MaterialTheme.colorScheme.surface
+                ) {
+                    Spacer(Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.padding(
+                            horizontal = 20.dp
+                        ),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = Blue,
+                            modifier = Modifier.size(38.dp)
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                "SecurityLab Pro",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                "Ultimate Security Workspace",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider()
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        "MAIN NAVIGATION",
+                        modifier = Modifier.padding(
+                            horizontal = 20.dp,
+                            vertical = 8.dp
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    destinations.forEachIndexed { index, item ->
+
+                        NavigationDrawerItem(
+                            label = {
+                                Column {
+                                    Text(
+                                        item.title,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    Text(
+                                        if (item.available) {
+                                            "Available"
+                                        } else {
+                                            "Planned"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
                             icon = {
                                 Icon(
                                     item.icon,
                                     contentDescription = item.title
                                 )
                             },
-                            label = { Text(item.title) }
+                            selected = selectedTab == index,
+                            onClick = {
+                                selectedTab = index
+
+                                scope.launch {
+                                    drawerState.close()
+                                }
+                            },
+                            modifier = Modifier.padding(
+                                NavigationDrawerItemDefaults.ItemPadding
+                            )
                         )
                     }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    HorizontalDivider()
+
+                    Text(
+                        "Only test systems you own or are authorized to assess.",
+                        modifier = Modifier.padding(20.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                AppHeader()
+        ) {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                bottomBar = {
+                    NavigationBar {
+                        bottomTabs.forEach { index ->
 
-                when (selectedTab) {
-                    0 -> HomeScreen(
-                        onScan = { selectedTab = 1 },
-                        onTools = { selectedTab = 2 }
+                            val item = destinations[index]
+
+                            NavigationBarItem(
+                                selected = selectedTab == index,
+                                onClick = {
+                                    selectedTab = index
+                                },
+                                icon = {
+                                    Icon(
+                                        item.icon,
+                                        contentDescription = item.title
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        when (index) {
+                                            0 -> "Home"
+                                            2 -> "Browser"
+                                            5 -> "Tools"
+                                            11 -> "Reports"
+                                            else -> "Settings"
+                                        },
+                                        maxLines = 1
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            ) { padding ->
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+
+                    AppHeader(
+                        onMenuClick = {
+                            scope.launch {
+                                drawerState.open()
+                            }
+                        }
                     )
 
-                    1 -> ScannerScreen(
-                        onResult = { latestReport = it }
-                    )
+                    when (selectedTab) {
 
-                    2 -> ToolsScreen()
+                        0 -> HomeScreen(
+                            onScan = {
+                                selectedTab = 1
+                            },
+                            onTools = {
+                                selectedTab = 5
+                            }
+                        )
 
-                    3 -> ReportsScreen(
-                        result = latestReport
-                    )
+                        1 -> ScannerScreen(
+                            onResult = {
+                                latestReport = it
+                            }
+                        )
 
-                    4 -> SettingsScreen(
-                        darkMode = darkMode,
-                        onThemeChange = { darkMode = it }
-                    )
+                        5 -> ToolsScreen()
+
+                        11 -> ReportsScreen(
+                            result = latestReport
+                        )
+
+                        12 -> SettingsScreen(
+                            darkMode = darkMode,
+                            onThemeChange = {
+                                darkMode = it
+                            }
+                        )
+
+                        else -> PlannedModuleScreen(
+                            destination = destinations[selectedTab]
+                        )
+                    }
                 }
             }
         }
@@ -128,13 +370,24 @@ fun SecurityLabApp() {
 }
 
 @Composable
-fun AppHeader() {
+fun AppHeader(
+    onMenuClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(
+            onClick = onMenuClick
+        ) {
+            Icon(
+                Icons.Default.Menu,
+                contentDescription = "Open Navigation Menu"
+            )
+        }
+
         Icon(
             Icons.Default.Shield,
             contentDescription = null,
@@ -152,7 +405,7 @@ fun AppHeader() {
             )
 
             Text(
-                "Mobile Security Toolkit",
+                "Ultimate Security Workspace",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -196,8 +449,13 @@ fun AppCard(
 
             Spacer(Modifier.width(16.dp))
 
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
+            Column(
+                Modifier.weight(1f)
+            ) {
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold
+                )
 
                 Spacer(Modifier.height(4.dp))
 
@@ -259,7 +517,9 @@ fun HomeScreen(
                 containerColor = Blue
             )
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(
+                Modifier.padding(20.dp)
+            ) {
                 Text(
                     "SECURITY OVERVIEW",
                     color = Color.White.copy(alpha = 0.8f)
@@ -293,40 +553,54 @@ fun HomeScreen(
             }
         }
 
-        SectionTitle("Security Modules")
+        SectionTitle("Quick Access")
 
         AppCard(
             "Security Scanner",
-            "Passive HTTPS and security header assessment",
-            Icons.Default.Search,
+            "HTTPS and security header assessment",
+            Icons.Default.Security,
             onScan
         )
 
         Spacer(Modifier.height(10.dp))
 
         AppCard(
-            "JWT Decoder",
-            "Decode token header and payload locally",
-            Icons.Default.Key,
+            "HackBar Studio",
+            "JWT decoder, HTTPS checker and header guide",
+            Icons.Default.Build,
             onTools
         )
 
         Spacer(Modifier.height(10.dp))
 
         AppCard(
-            "HTTPS Checker",
-            "Validate HTTPS URL format",
-            Icons.Default.Lock,
-            onTools
+            "Research Browser",
+            "Planned security research browser",
+            Icons.Default.Language
         )
 
         Spacer(Modifier.height(10.dp))
 
         AppCard(
-            "Security Headers Guide",
-            "Learn important HTTP security headers",
-            Icons.Default.Policy,
-            onTools
+            "Recon Studio",
+            "Planned asset discovery workspace",
+            Icons.Default.Search
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        AppCard(
+            "SQL Injection Lab",
+            "Planned safe SQL learning environment",
+            Icons.Default.Storage
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        AppCard(
+            "Report Center",
+            "View the latest assessment report",
+            Icons.Default.Description
         )
 
         Spacer(Modifier.height(20.dp))
@@ -343,11 +617,25 @@ fun HomeScreen(
 fun ScannerScreen(
     onResult: (SecurityAssessmentResult) -> Unit
 ) {
-    var target by remember { mutableStateOf("") }
-    var scope by remember { mutableStateOf("") }
-    var authorized by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Ready to assess.") }
+    var target by remember {
+        mutableStateOf("")
+    }
+
+    var scope by remember {
+        mutableStateOf("")
+    }
+
+    var authorized by remember {
+        mutableStateOf(false)
+    }
+
+    var loading by remember {
+        mutableStateOf(false)
+    }
+
+    var message by remember {
+        mutableStateOf("Ready to assess.")
+    }
 
     var report by remember {
         mutableStateOf<SecurityAssessmentResult?>(null)
@@ -376,9 +664,15 @@ fun ScannerScreen(
 
         OutlinedTextField(
             value = target,
-            onValueChange = { target = it },
-            label = { Text("HTTPS Website URL") },
-            placeholder = { Text("https://example.com") },
+            onValueChange = {
+                target = it
+            },
+            label = {
+                Text("HTTPS Website URL")
+            },
+            placeholder = {
+                Text("https://example.com")
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -387,17 +681,27 @@ fun ScannerScreen(
 
         OutlinedTextField(
             value = scope,
-            onValueChange = { scope = it },
-            label = { Text("Authorized Scope / Notes") },
-            placeholder = { Text("Example: My own website") },
+            onValueChange = {
+                scope = it
+            },
+            label = {
+                Text("Authorized Scope / Notes")
+            },
+            placeholder = {
+                Text("Example: My own website")
+            },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2
         )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Checkbox(
                 checked = authorized,
-                onCheckedChange = { authorized = it }
+                onCheckedChange = {
+                    authorized = it
+                }
             )
 
             Text(
@@ -407,6 +711,7 @@ fun ScannerScreen(
 
         Button(
             onClick = {
+
                 val valid = runCatching {
                     val uri = URI(target.trim())
 
@@ -432,6 +737,7 @@ fun ScannerScreen(
                         message = "Connecting securely..."
 
                         coroutineScope.launch {
+
                             val response = withContext(Dispatchers.IO) {
                                 runCatching {
                                     SecurityAssessmentEngine.inspect(
@@ -476,7 +782,11 @@ fun ScannerScreen(
             Spacer(Modifier.width(8.dp))
 
             Text(
-                if (loading) "Assessing..." else "Start Assessment"
+                if (loading) {
+                    "Assessing..."
+                } else {
+                    "Start Assessment"
+                }
             )
         }
 
@@ -498,7 +808,9 @@ fun ScannerScreen(
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(
+                    Modifier.padding(16.dp)
+                ) {
                     Text(
                         "HTTP Status: ${result.statusCode}",
                         fontWeight = FontWeight.Bold
@@ -563,13 +875,17 @@ fun ScannerScreen(
 
 @Composable
 fun ToolsScreen() {
-    var jwt by remember { mutableStateOf("") }
+    var jwt by remember {
+        mutableStateOf("")
+    }
 
     var jwtResult by remember {
         mutableStateOf("Decoded token data will appear here.")
     }
 
-    var url by remember { mutableStateOf("") }
+    var url by remember {
+        mutableStateOf("")
+    }
 
     var urlResult by remember {
         mutableStateOf("Enter a URL to validate.")
@@ -595,8 +911,12 @@ fun ToolsScreen() {
 
         OutlinedTextField(
             value = jwt,
-            onValueChange = { jwt = it },
-            label = { Text("Paste JWT Token") },
+            onValueChange = {
+                jwt = it
+            },
+            label = {
+                Text("Paste JWT Token")
+            },
             modifier = Modifier.fillMaxWidth(),
             minLines = 4
         )
@@ -627,9 +947,15 @@ fun ToolsScreen() {
 
         OutlinedTextField(
             value = url,
-            onValueChange = { url = it },
-            label = { Text("Website URL") },
-            placeholder = { Text("https://example.com") },
+            onValueChange = {
+                url = it
+            },
+            label = {
+                Text("Website URL")
+            },
+            placeholder = {
+                Text("https://example.com")
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -669,6 +995,7 @@ fun ToolsScreen() {
         )
 
         headers.forEach { (name, description) ->
+
             AppCard(
                 name,
                 description,
@@ -751,16 +1078,21 @@ fun ReportsScreen(
         SectionTitle("Latest Assessment")
 
         if (result == null) {
+
             AppCard(
                 "No reports yet",
                 "Run a passive assessment to create a report.",
                 Icons.Default.Description
             )
+
         } else {
+
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(
+                    Modifier.padding(16.dp)
+                ) {
                     Text(
                         result.url,
                         fontWeight = FontWeight.Bold
@@ -775,7 +1107,9 @@ fun ReportsScreen(
                     Text("Checked: ${result.checkedAt}")
 
                     result.findings.forEach {
+
                         Spacer(Modifier.height(8.dp))
+
                         Text("${it.name}: ${it.detail}")
                     }
                 }
@@ -788,6 +1122,72 @@ fun ReportsScreen(
             "This version displays the latest report during the current app session. Persistent history and PDF export are not included yet.",
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun PlannedModuleScreen(
+    destination: AppDestination
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            destination.title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    destination.icon,
+                    contentDescription = null,
+                    tint = Blue,
+                    modifier = Modifier.size(42.dp)
+                )
+
+                Text(
+                    "Module Development",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    destination.subtitle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                AssistChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            if (destination.available) {
+                                "Available"
+                            } else {
+                                "Planned Module"
+                            }
+                        )
+                    }
+                )
+
+                Text(
+                    "Navigation is ready. Functional tools for this module will be implemented in a later development phase.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
@@ -817,7 +1217,9 @@ fun SettingsScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(
+                    Modifier.weight(1f)
+                ) {
                     Text(
                         "Dark Theme",
                         fontWeight = FontWeight.Bold
