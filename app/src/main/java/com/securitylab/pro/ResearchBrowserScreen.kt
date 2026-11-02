@@ -9,8 +9,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -47,12 +45,29 @@ fun ResearchBrowserScreen() {
         mutableStateOf(false)
     }
 
+    var mobileUserAgent by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var pageError by remember {
         mutableStateOf("")
     }
 
     var webView by remember {
         mutableStateOf<WebView?>(null)
+    }
+
+    var canGoBack by remember {
+        mutableStateOf(false)
+    }
+
+    var canGoForward by remember {
+        mutableStateOf(false)
+    }
+
+    fun updateNavigationState(view: WebView?) {
+        canGoBack = view?.canGoBack() == true
+        canGoForward = view?.canGoForward() == true
     }
 
     fun navigate(input: String) {
@@ -88,10 +103,9 @@ fun ResearchBrowserScreen() {
         webView?.loadUrl(normalized)
     }
 
-    BackHandler(
-        enabled = webView?.canGoBack() == true
-    ) {
+    BackHandler(enabled = canGoBack) {
         webView?.goBack()
+        updateNavigationState(webView)
     }
 
     DisposableEffect(Unit) {
@@ -106,7 +120,7 @@ fun ResearchBrowserScreen() {
         modifier = Modifier.fillMaxSize()
     ) {
         Text(
-            "Security Research Browser",
+            text = "Security Research Browser",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(
                 horizontal = 16.dp,
@@ -154,9 +168,10 @@ fun ResearchBrowserScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
-                enabled = webView?.canGoBack() == true,
+                enabled = canGoBack,
                 onClick = {
                     webView?.goBack()
+                    updateNavigationState(webView)
                 }
             ) {
                 Icon(
@@ -166,9 +181,10 @@ fun ResearchBrowserScreen() {
             }
 
             IconButton(
-                enabled = webView?.canGoForward() == true,
+                enabled = canGoForward,
                 onClick = {
                     webView?.goForward()
+                    updateNavigationState(webView)
                 }
             ) {
                 Icon(
@@ -211,20 +227,20 @@ fun ResearchBrowserScreen() {
                     checked = desktopMode,
                     onCheckedChange = { enabled ->
                         desktopMode = enabled
-                        webView?.let { browser ->
-                            val settings = browser.settings
 
-                            settings.userAgentString =
+                        webView?.let { browser ->
+                            browser.settings.userAgentString =
                                 if (enabled) {
                                     "Mozilla/5.0 (X11; Linux x86_64) " +
                                         "AppleWebKit/537.36 " +
                                         "(KHTML, like Gecko) " +
                                         "Chrome/120.0.0.0 Safari/537.36"
                                 } else {
-                                    WebView(context = browser.context)
-                                        .settings.userAgentString
+                                    mobileUserAgent
                                 }
 
+                            browser.settings.useWideViewPort = enabled
+                            browser.settings.loadWithOverviewMode = enabled
                             browser.reload()
                         }
                     }
@@ -241,14 +257,14 @@ fun ResearchBrowserScreen() {
 
         if (pageError.isNotBlank()) {
             Text(
-                pageError,
+                text = pageError,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(12.dp)
             )
         }
 
         Text(
-            pageTitle,
+            text = pageTitle,
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
             modifier = Modifier.padding(
@@ -259,11 +275,10 @@ fun ResearchBrowserScreen() {
 
         AndroidView(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .weight(1f),
             factory = { context ->
                 WebView(context).apply {
-
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.allowFileAccess = false
@@ -273,6 +288,11 @@ fun ResearchBrowserScreen() {
                     settings.mixedContentMode =
                         android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
+                    settings.useWideViewPort = false
+                    settings.loadWithOverviewMode = false
+
+                    mobileUserAgent = settings.userAgentString
+
                     webViewClient = object : WebViewClient() {
 
                         override fun onPageStarted(
@@ -281,12 +301,15 @@ fun ResearchBrowserScreen() {
                             favicon: Bitmap?
                         ) {
                             loading = true
+                            progress = 0
                             pageError = ""
 
                             if (url != null) {
                                 currentUrl = url
                                 address = url
                             }
+
+                            updateNavigationState(view)
                         }
 
                         override fun onPageFinished(
@@ -303,6 +326,8 @@ fun ResearchBrowserScreen() {
 
                             pageTitle =
                                 view?.title ?: "Research Browser"
+
+                            updateNavigationState(view)
                         }
 
                         override fun shouldOverrideUrlLoading(
@@ -319,6 +344,7 @@ fun ResearchBrowserScreen() {
                     }
 
                     webChromeClient = object : WebChromeClient() {
+
                         override fun onProgressChanged(
                             view: WebView?,
                             newProgress: Int
@@ -331,7 +357,8 @@ fun ResearchBrowserScreen() {
                             view: WebView?,
                             title: String?
                         ) {
-                            pageTitle = title ?: "Research Browser"
+                            pageTitle =
+                                title ?: "Research Browser"
                         }
                     }
 
@@ -341,11 +368,12 @@ fun ResearchBrowserScreen() {
             },
             update = { view ->
                 webView = view
+                updateNavigationState(view)
             }
         )
 
         Text(
-            "Use only authorized websites for security research. " +
+            text = "Use only authorized websites for security research. " +
                 "This browser does not perform exploitation.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
